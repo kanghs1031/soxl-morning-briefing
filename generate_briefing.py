@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-TICKERS = {"SOXL": "SOXL", "SOXX": "SOXX", "QQQ": "QQQ", "NVDA": "NVDA", "AMD": "AMD", "AVGO": "AVGO", "MU": "MU", "TSM": "TSM", "ASML": "ASML", "LRCX": "LRCX"}
+TICKERS = {"SOXL": "SOXL", "SOXX": "SOXX", "QQQ": "QQQ", "NVDA": "NVDA", "AMD": "AMD", "AVGO": "AVGO", "MU": "MU", "TSM": "TSM", "ASML": "ASML", "LRCX": "LRCX", "SOX": "^SOX"}
 VIX_URL = 'https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv'
 
 
@@ -29,13 +29,18 @@ def yahoo_prices(symbol, getter=get_text):
     result = raw['chart']['result'][0]
     stamps = result['timestamp']
     closes = result['indicators']['quote'][0]['close']
-    points = [(datetime.fromtimestamp(ts, timezone.utc).strftime('%Y-%m-%d'), float(close)) for ts, close in zip(stamps, closes) if close is not None and float(close) > 0]
+    points = [(datetime.fromtimestamp(ts, ZoneInfo('America/New_York')).strftime('%Y-%m-%d'), float(close)) for ts, close in zip(stamps, closes) if close is not None and float(close) > 0]
     if len(points) < 2:
         raise ValueError('최근 유효 종가가 2개 미만')
     points.sort()
     date, close = points[-1]
     prev = points[-2][1]
-    return {'date': date, 'close': round(close, 4), 'changePct': round((close / prev - 1) * 100, 2), 'provider': 'Yahoo Finance chart (비공식 공개 엔드포인트)'}
+    change = (close / prev - 1) * 100
+    flagged = abs(change) > (35 if symbol == 'SOXL' else 20)
+    return {'date': date, 'close': round(close, 4), 'previousClose': round(prev, 4),
+            'previousDate': points[-2][0], 'changePct': None if flagged else round(change, 2),
+            'warning': '등락률 검증 필요' if flagged else None,
+            'provider': 'Yahoo Finance chart (비공식 공개 엔드포인트)'}
 
 
 def cboe_vix(getter=get_text):
@@ -58,24 +63,31 @@ def cboe_vix(getter=get_text):
     return {'date': date, 'close': round(value, 2)}
 
 
+def quote_line(ticker, p):
+    price = f"{p['close']:.2f} pt" if ticker == 'SOX' else f"${p['close']:.2f}"
+    change = p.get('changePct')
+    label = f'{change:+.2f}%' if isinstance(change, (int, float)) else '등락률 미확인'
+    return f"{ticker}: {price} ({label}) · 미국 거래일 {p['date']}" + (' · ⚠ 검증 필요' if p.get('warning') else '')
+
+
 def build(now, prices, vix=None, errors=None):
     errors = errors or []
     kst = now.astimezone(ZoneInfo('Asia/Seoul'))
     date = kst.date().isoformat()
     lines = [f'[{date} 오전 시장 데이터 브리핑 · 무료 자동 생성]',
              '※ 미국 정규장 종가 기반 자료입니다. 실시간 시세·프리마켓·매매 신호가 아닙니다.',
-             '※ ChatGPT 오전 8시 예약 브리핑과 별개이며, 뉴스 해석이나 경제일정은 자동 생성하지 않습니다.', '',
-             '■ 미국 시장 및 반도체 ETF (최근 확인된 거래일 종가)']
-    for ticker in ['SOXL', 'SOXX', 'QQQ']:
+             '※ ChatGPT 오전 9시 예약 브리핑과 별개이며, 뉴스 해석이나 경제일정은 자동 생성하지 않습니다.', '',
+             '■ 미국 시장 및 반도체 ETF·SOX 지수 (최근 확인된 거래일 종가)']
+    for ticker in ['SOXL', 'SOX', 'SOXX', 'QQQ']:
         p = prices.get(ticker)
         if p:
-            lines.append(f"{ticker}: ${p['close']:.2f} ({p['changePct']:+.2f}%) · 미국 거래일 {p['date']}")
+            lines.append(quote_line(ticker, p))
         else:
             lines.append(f'{ticker}: 데이터 미확인')
     lines += ['', '■ 반도체 주요 종목 (최근 확인된 거래일 종가)']
     for ticker in ['NVDA', 'AMD', 'AVGO', 'MU', 'TSM', 'ASML', 'LRCX']:
         p = prices.get(ticker)
-        lines.append(f"{ticker}: ${p['close']:.2f} ({p['changePct']:+.2f}%) · {p['date']}" if p else f'{ticker}: 데이터 미확인')
+        lines.append(quote_line(ticker, p) if p else f'{ticker}: 데이터 미확인')
     lines += ['', '■ 변동성 지수']
     lines.append(f"VIX: {vix['close']:.2f} · 미국 거래일 {vix['date']} (Cboe 공식 일별 종가)" if vix else 'VIX: 데이터 미확인')
     lines.append('CNN 공포·탐욕 지수: 무료·안정적 자동 수집 경로를 확인하지 못해 표시하지 않습니다.')
@@ -122,7 +134,7 @@ def main():
     dest = Path(os.environ.get('OUTPUT_DIR', 'public'))
     dest.mkdir(parents=True, exist_ok=True)
     (dest / 'briefing-latest.json').write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding='utf-8')
-    (dest / 'index.html').write_text('<!doctype html><html lang="ko"><meta charset="utf-8"><title>SOXL 브리핑 피드</title><p>SOXL 앱 v1.3의 브리핑 JSON 주소에 <code>briefing-latest.json</code>을 입력하세요.</p></html>', encoding='utf-8')
+    (dest / 'index.html').write_text('<!doctype html><html lang="ko"><meta charset="utf-8"><title>SOXL 브리핑 피드</title><p>SOXL 앱 v2.3의 브리핑 JSON 주소에 <code>briefing-latest.json</code>을 입력하세요.</p></html>', encoding='utf-8')
     (dest / '.nojekyll').write_text('', encoding='utf-8')
     print('Generated:', dest / 'briefing-latest.json')
     return 0
