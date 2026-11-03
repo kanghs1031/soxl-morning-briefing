@@ -13,6 +13,14 @@ class FeedTests(unittest.TestCase):
             return json.dumps({'chart': {'result': [{'timestamp': [1761868800, 1761955200], 'indicators': {'quote': [{'close': [10, 11]}]}}]}})
         self.assertEqual(yahoo_prices('SOXL', getter)['changePct'], 10)
 
+    def test_sox_and_abnormal(self):
+        def getter(url):
+            return json.dumps({'chart': {'result': [{'timestamp': [1761868800, 1761955200], 'indicators': {'quote': [{'close': [100, 200]}]}}]}})
+        q = yahoo_prices('^SOX', getter)
+        self.assertIsNone(q['changePct'])
+        self.assertTrue(q['warning'])
+        self.assertEqual(q['previousClose'], 100)
+
     def test_vix_parser(self):
         def getter(url):
             return 'Some header\nDATE,OPEN,HIGH,LOW,CLOSE\n10/30/2026,18,19,17,18.25\n10/29/2026,19,20,18,19.10\n'
