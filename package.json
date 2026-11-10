@@ -1,0 +1,14 @@
+{
+  "name": "soxl-paper-trading-v3",
+  "private": true,
+  "version": "3.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/v3-*.test.mjs",
+    "test:e2e": "playwright test",
+    "build": "node scripts/build-v3.mjs",
+    "serve": "node scripts/serve-v3.mjs",
+    "check": "npm test && npm run build && npm run test:e2e"
+  },
+  "devDependencies": { "@playwright/test": "1.65.0" }
+}
