@@ -56,6 +56,22 @@ test('account controls place and cancel limits, save risk and export backups', a
  await expect(page.getByLabel('매매 수수료 (bp)',{exact:true})).toHaveValue('3');
 });
 
+test('selected account can demonstrate a stop and restore its scenario',async({page})=>{
+ await page.goto('/');page.on('dialog',d=>d.accept());
+ await page.getByLabel('예제 계좌',{exact:true}).selectOption('7');
+ await page.getByLabel('예제 유형',{exact:true}).selectOption('stop');
+ await page.getByRole('button',{name:'예제 매매 실행'}).click();
+ await expect(page.getByRole('status')).toContainText('계좌 7');
+ await page.getByRole('tab',{name:'7계좌',exact:true}).click();
+ const account=page.getByTestId('account-card').nth(6);
+ await expect(account).toContainText('손절 매도');await expect(account).toContainText('미체결 0건');
+ await expect(account.getByTestId('quantity')).toHaveText('0주');
+ await expect(page.getByTestId('account-card').first()).toContainText('체결 기록 0건');
+ await page.reload();await page.getByRole('tab',{name:'7계좌',exact:true}).click();
+ await expect(account).toContainText('손절 매도');
+ await page.getByRole('tab',{name:'시장',exact:true}).click();await expect(page.getByText('2개 합성 캔들 · KST')).toBeVisible();
+});
+
 test('offline installed shell loads and retains complete paper trade',async({page,context})=>{
  await page.goto('/');page.on('dialog',d=>d.accept());
  await page.getByRole('button',{name:'예제 매매 실행'}).click();

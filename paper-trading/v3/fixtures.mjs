@@ -8,3 +8,8 @@ export const TRADE_FIXTURE=[
  {time:time(0),open:101,high:102,low:99.8,close:101,volume:10000},
  {time:time(1),open:106,high:108,low:105.5,close:107,volume:10000}
 ];
+// Deliberately adverse synthetic gap, never a historical SOXL quote.
+export const STOP_FIXTURE=[
+ {...TRADE_FIXTURE[0]},
+ {time:time(1),open:80,high:110,low:79,close:90,volume:10000}
+];
